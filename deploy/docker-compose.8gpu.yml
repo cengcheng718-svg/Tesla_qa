@@ -1,0 +1,29 @@
+services:
+  vllm:
+    environment:
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
+    command:
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --model
+      - /models/qwen3_lora_sft_int4
+      - --served-model-name
+      - ${VLLM_SERVED_MODEL_NAME:-qwen3_lora_sft_int4}
+      - --tensor-parallel-size
+      - ${VLLM_TENSOR_PARALLEL_SIZE:-8}
+      - --max-model-len
+      - ${VLLM_MAX_MODEL_LEN:-8192}
+      - --gpu-memory-utilization
+      - ${VLLM_GPU_MEMORY_UTILIZATION:-0.86}
+      - --trust-remote-code
+      - --disable-log-requests
+
+  rag-api:
+    environment:
+      # 八卡推理时 LLM 侧吞吐更高，可以适度提高 API 并发；最终值仍以压测 P95/P99 为准。
+      RAG_MAX_INFLIGHT_REQUESTS: ${RAG_MAX_INFLIGHT_REQUESTS:-8}
+      LOCAL_LLM_BASE_URL: http://vllm:8000/v1
+      LOCAL_LLM_MODEL: ${VLLM_SERVED_MODEL_NAME:-qwen3_lora_sft_int4}

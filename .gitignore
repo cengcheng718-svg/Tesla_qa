@@ -1,0 +1,66 @@
+# macOS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environments and secrets
+.env
+.env.*
+!.env.example
+config.ini
+config.local.ini
+
+# Logs and runtime output
+log/
+logs/
+*.log
+
+# Local databases, indexes, and project data
+*.db
+*.sqlite
+*.sqlite3
+data/
+data/saved_index/
+data/processed_docs/
+data/saved_images/
+
+# Large datasets and generated artifacts
+data/**/*.pkl
+data/**/*.bin
+data/**/*.npy
+data/**/*.npz
+data/**/*.parquet
+data/**/*.arrow
+
+# Model weights and local model directories
+models/
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+
+# Third-party / heavyweight local dependencies
+LLaMA-Factory-main/
+mongodb-7.0.20/
+
+# Keep the external retrieval code out unless intentionally vendored.
+# If you want to publish this code, remove this line and add a smaller
+# .gitignore inside RAG-Retrieval for checkpoints and outputs.
+RAG-Retrieval/
+
+# Docker/runtime temp files
+.docker/
+tmp/
+temp/

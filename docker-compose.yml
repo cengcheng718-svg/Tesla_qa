@@ -1,0 +1,108 @@
+name: tesla-manual-rag
+
+services:
+  mongo:
+    image: mongo:7.0
+    container_name: tesla-rag-mongo
+    restart: unless-stopped
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - ./data/mongodb/data:/data/db
+      - ./data/mongodb/log:/var/log/mongodb
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  vllm:
+    image: vllm/vllm-openai:v0.9.0.1
+    container_name: tesla-rag-vllm
+    restart: unless-stopped
+    ipc: host
+    gpus: all
+    ports:
+      - "${VLLM_PORT:-8000}:8000"
+    volumes:
+      - ${LOCAL_LLM_MODEL_HOST_PATH:-./LLaMA-Factory-main/output/qwen3_lora_sft_int4}:/models/qwen3_lora_sft_int4:ro
+      - ${HF_CACHE_HOST_PATH:-./.cache/huggingface}:/root/.cache/huggingface
+    command:
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --model
+      - /models/qwen3_lora_sft_int4
+      - --served-model-name
+      - ${VLLM_SERVED_MODEL_NAME:-qwen3_lora_sft_int4}
+      - --max-model-len
+      - ${VLLM_MAX_MODEL_LEN:-8192}
+      - --gpu-memory-utilization
+      - ${VLLM_GPU_MEMORY_UTILIZATION:-0.7}
+      - --disable-log-requests
+    environment:
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0}
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
+
+  rag-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tesla-rag-api
+    restart: unless-stopped
+    gpus: all
+    depends_on:
+      mongo:
+        condition: service_healthy
+      vllm:
+        condition: service_started
+    ports:
+      - "${RAG_API_PORT:-8080}:8080"
+    environment:
+      RAG_BASE_DIR: /app
+      SERVICE_VERSION: ${SERVICE_VERSION:-0.2.0}
+      ENABLE_METRICS: ${ENABLE_METRICS:-1}
+      RAG_MAX_INFLIGHT_REQUESTS: ${RAG_MAX_INFLIGHT_REQUESTS:-2}
+      RAG_BM25_TOPK: ${RAG_BM25_TOPK:-10}
+      RAG_MILVUS_TOPK: ${RAG_MILVUS_TOPK:-10}
+      RAG_RERANK_TOPK: ${RAG_RERANK_TOPK:-5}
+      RAG_EMBEDDING_DEVICE: ${RAG_EMBEDDING_DEVICE:-cuda}
+      RAG_RERANKER_DEVICE: ${RAG_RERANKER_DEVICE:-cuda}
+      LOCAL_LLM_BASE_URL: http://vllm:8000/v1
+      LOCAL_LLM_API_KEY: ${LOCAL_LLM_API_KEY:-EMPTY}
+      LOCAL_LLM_MODEL: ${VLLM_SERVED_MODEL_NAME:-qwen3_lora_sft_int4}
+      LOCAL_LLM_TIMEOUT_SECONDS: ${LOCAL_LLM_TIMEOUT_SECONDS:-120}
+      LOCAL_LLM_MAX_RETRIES: ${LOCAL_LLM_MAX_RETRIES:-2}
+      CUDA_VISIBLE_DEVICES: ${RAG_API_CUDA_VISIBLE_DEVICES:-0}
+      MONGO_HOST: mongo
+      MONGO_PORT: 27017
+      MONGO_DB_NAME: ${MONGO_DB_NAME:-mydatabase}
+      MONGO_USERNAME: ${MONGO_USERNAME:-}
+      MONGO_PASSWORD: ${MONGO_PASSWORD:-}
+      MONGO_AUTH_SOURCE: ${MONGO_AUTH_SOURCE:-admin}
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models:ro
+      - ./RAG-Retrieval:/app/RAG-Retrieval:ro
+      - ./log:/app/log
+
+  semantic-chunk:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["tools"]
+    container_name: tesla-rag-semantic-chunk
+    restart: unless-stopped
+    command: ["python3", "src/server/semantic_chunk.py"]
+    ports:
+      - "${SEMANTIC_CHUNK_PORT:-6000}:6000"
+    environment:
+      RAG_BASE_DIR: /app
+      PYTHONPATH: /app
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models:ro
+      - ./log:/app/log
